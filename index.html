@@ -90,60 +90,67 @@
 <script>
     let rawData = null;
 
-    async function fetchTLSData() {
-        const statusEl = document.getElementById('status');
-        const contentEl = document.getElementById('content');
-        const exportBtn = document.getElementById('export-btn');
+function fetchTLSData() {
+    const statusEl = document.getElementById('status');
+    const contentEl = document.getElementById('content');
+    const exportBtn = document.getElementById('export-btn');
 
-        try {
-            // 使用稳定可靠的 Browserleaks 接口
-            const response = await fetch('https://tls.browserleaks.com/json');
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            
-            rawData = await response.json();
+    // 1. 定义 JSONP 回调函数
+    window.handleFingerprintResponse = function(data) {
+        rawData = data;
 
-            // 1. JA3 指纹渲染
-            document.getElementById('ja3-hash').textContent = rawData.ja3_hash || '未获取到';
-            document.getElementById('ja3-str').textContent = rawData.ja3_text || rawData.ja3 || '未获取到';
+        // 提取 JA3
+        document.getElementById('ja3-hash').textContent = rawData.ja3_hash || '未获取到';
+        document.getElementById('ja3-str').textContent = rawData.ja3_text || rawData.ja3 || '未获取到';
 
-            // 2. HTTP/2 指纹细分渲染
-            const h2 = rawData.http2 || rawData;
-            document.getElementById('h2-akamai').textContent = h2.akamai_fingerprint || h2.fingerprint || '未启用 H2 或未获取到';
-            
-            document.getElementById('h2-settings').textContent = h2.settings || h2.settings_frame || JSON.stringify(h2.settings_data || 'N/A');
-            document.getElementById('h2-window').textContent = h2.window_update || h2.window_size || 'N/A';
-            document.getElementById('h2-priority').textContent = h2.priority || h2.priority_frame || 'N/A';
-            document.getElementById('h2-headers').textContent = h2.headers_order || h2.sent_headers || 'N/A';
-
-            // 3. 渲染完整原始 JSON 文本
-            document.getElementById('json-raw').textContent = JSON.stringify(rawData, null, 2);
-
-            statusEl.style.display = 'none';
-            contentEl.style.display = 'block';
-            exportBtn.disabled = false;
-        } catch (error) {
-            statusEl.className = 'error';
-            statusEl.textContent = '获取失败: ' + error.message;
-        }
-    }
-
-    function exportJSON() {
-        if (!rawData) return;
-        const jsonStr = JSON.stringify(rawData, null, 2);
-        const blob = new Blob([jsonStr], { type: 'application/json' });
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        // 提取 HTTP/2 详细指纹
+        const h2 = rawData.http2 || rawData;
+        document.getElementById('h2-akamai').textContent = h2.akamai_fingerprint || h2.fingerprint || '未启用 H2';
         
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `fb-webview-full-fingerprint-${timestamp}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }
+        document.getElementById('h2-settings').textContent = h2.settings || h2.settings_frame || JSON.stringify(h2.settings_data || 'N/A');
+        document.getElementById('h2-window').textContent = h2.window_update || h2.window_size || 'N/A';
+        document.getElementById('h2-priority').textContent = h2.priority || h2.priority_frame || 'N/A';
+        document.getElementById('h2-headers').textContent = h2.headers_order || h2.sent_headers || 'N/A';
 
-    fetchTLSData();
+        // 渲染完整 JSON 响应
+        document.getElementById('json-raw').textContent = JSON.stringify(rawData, null, 2);
+
+        // 显示内容并启用导出
+        statusEl.style.display = 'none';
+        contentEl.style.display = 'block';
+        exportBtn.disabled = false;
+    };
+
+    // 2. 动态创建 script 标签发起 JSONP 请求（带 callback 参数）
+    const script = document.createElement('script');
+    script.src = 'https://tls.browserleaks.com/json?callback=handleFingerprintResponse';
+    
+    script.onerror = function() {
+        statusEl.className = 'error';
+        statusEl.textContent = '获取指纹失败，请检查网络连接！';
+    };
+
+    document.head.appendChild(script);
+}
+
+function exportJSON() {
+    if (!rawData) return;
+    const jsonStr = JSON.stringify(rawData, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `fb-webview-full-fingerprint-${timestamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// 启动执行
+fetchTLSData();
 </script>
 
 </body>
